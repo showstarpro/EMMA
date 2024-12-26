@@ -124,6 +124,6 @@ def xformers_forward(
 
         attn_output = attn_output.transpose(1, 2)
 
-    attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+    attn_output = attn_output.reshape(bsz, q_len, self.hidden_size).contiguous()
     attn_output = self.o_proj(attn_output)
     return attn_output, attn_weights, past_key_value

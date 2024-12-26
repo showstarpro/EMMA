@@ -185,7 +185,7 @@ def find_all_linear_names(model):
         lora_module_names.remove('lm_head')
     return list(lora_module_names)
 
-
+#### useful code
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
                                    output_dir: str):
     """Collects the state dict and dump to disk."""
@@ -786,17 +786,17 @@ class DataCollatorForSupervisedDataset(object):
         labels = labels[:, :self.tokenizer.model_max_length]
         prompt_input_ids = [instance['prompt_input_ids'] for instance in instances]
         batch = dict(
-            input_ids=input_ids,
-            labels=labels,
-            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
-            prompt_input_ids=torch.cat(prompt_input_ids, dim=0),
+            input_ids=input_ids.contiguous(),
+            labels=labels.contiguous(),
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id).contiguous(),
+            prompt_input_ids=torch.cat(prompt_input_ids, dim=0).contiguous(),
         )
         if 'image' in instances[0]:
             images = [instance['image'] for instance in instances]
             if all(x is not None and x.shape == images[0].shape for x in images):
-                batch['images'] = torch.stack(images)
+                batch['images'] = torch.stack(images).contiguous()
             else:
-                batch['images'] = images
+                batch['images'] = images.contiguous()
 
         return batch
 
@@ -1027,7 +1027,7 @@ def train(attn_implementation=None):
         safe_save_model_for_hf_trainer(trainer=trainer,
                                        output_dir=training_args.output_dir)
 
-
+### useful code for preprocess_vision_prompt
 def preprocess_vision_prompt(sources, prompt_tokenizer):
     import random
     assert len(sources) == 1

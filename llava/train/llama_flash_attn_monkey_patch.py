@@ -32,17 +32,17 @@ def forward(
     query_states = (
         self.q_proj(hidden_states)
         .view(bsz, q_len, self.num_heads, self.head_dim)
-        .transpose(1, 2)
+        .transpose(1, 2).contiguous()
     )
     key_states = (
         self.k_proj(hidden_states)
         .view(bsz, q_len, self.num_key_value_heads, self.head_dim)
-        .transpose(1, 2)
+        .transpose(1, 2).contiguous()
     )
     value_states = (
         self.v_proj(hidden_states)
         .view(bsz, q_len, self.num_key_value_heads, self.head_dim)
-        .transpose(1, 2)
+        .transpose(1, 2).contiguous()
     )  # shape: (b, num_heads, s, head_dim)
 
     kv_seq_len = key_states.shape[-2]
@@ -67,11 +67,11 @@ def forward(
 
     # Transform the data into the format required by flash attention
     qkv = torch.stack([query_states, key_states, value_states], dim=2)
-    qkv = qkv.transpose(1, 3)  # shape: [b, s, 3, num_heads, head_dim]
+    qkv = qkv.transpose(1, 3).contiguous()  # shape: [b, s, 3, num_heads, head_dim]
     key_padding_mask = attention_mask
 
     if key_padding_mask is None:
-        qkv = qkv.reshape(-1, 3, self.num_heads, self.head_dim)
+        qkv = qkv.reshape(-1, 3, self.num_heads, self.head_dim).contiguous()
         cu_q_lens = torch.arange(
             0, (bsz + 1) * q_len, step=q_len, dtype=torch.int32, device=qkv.device
         )
@@ -79,15 +79,15 @@ def forward(
         output = flash_attn_unpadded_qkvpacked_func(
             qkv, cu_q_lens, max_s, 0.0, softmax_scale=None, causal=True
         )
-        output = output.view(bsz, q_len, -1)
+        output = output.view(bsz, q_len, -1).contiguous()
     else:
-        qkv = qkv.reshape(bsz, q_len, -1)
+        qkv = qkv.reshape(bsz, q_len, -1).contiguous()
         qkv, indices, cu_q_lens, max_s = unpad_input(qkv, key_padding_mask)
-        qkv = qkv.view(-1, 3, self.num_heads, self.head_dim)
+        qkv = qkv.view(-1, 3, self.num_heads, self.head_dim).contiguous()
         output_unpad = flash_attn_unpadded_qkvpacked_func(
             qkv, cu_q_lens, max_s, 0.0, softmax_scale=None, causal=True
         )
-        output_unpad = output_unpad.reshape(-1, self.num_heads * self.head_dim)
+        output_unpad = output_unpad.reshape(-1, self.num_heads * self.head_dim).contiguous()
         output = pad_input(output_unpad, indices, bsz, q_len)
 
     return self.o_proj(output), None, past_key_value
